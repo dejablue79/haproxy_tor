@@ -1,0 +1,29 @@
+global
+  #daemon
+  maxconn 4000
+  tune.ssl.default-dh-param 2048
+
+defaults
+  log               global
+  retries           3
+  maxconn           2000
+  timeout connect   5s
+  timeout client    50s
+  timeout server    50s
+
+
+frontend tor_frontend
+  bind *:{{ haproxy_port }}
+  mode http
+  use_backend tor
+
+backend tor
+  balance roundrobin
+  #balance leastconn
+  mode http
+  option forwardfor
+{% for i in range(socks) %}
+  server  tor{{ i }} 127.0.0.1:{{ tor_http_tunnel_port + i }}
+{% endfor %}
+
+
