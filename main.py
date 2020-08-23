@@ -1,13 +1,10 @@
-import jinja2
 from stem.control import Controller
-from stem import process
-from stem import Signal
-from os import getenv
+from stem import process, Signal
+from os import getenv, path
 from random import randint
-import os
 import subprocess
-from time import sleep
 import asyncio
+import jinja2
 
 
 def start_tor(socks: int, socks_port: int, control_port: int, tor_http_tunnel_port: int):
@@ -38,7 +35,7 @@ def reset_socks(socks: int, control_port: int):
         controller.signal(Signal.NEWNYM)
 
 
-def create_ha_conf(socks: int, tor_http_tunnel_port: int, haproxy_port: int):
+def create_ha_conf(socks: int, tor_http_tunnel_port: int, haproxy_port: int) -> str:
     template_filename = "./haproxy.cfg.j2"
     rendered_filename = "haproxy.cfg"
     render_vars = {
@@ -47,30 +44,31 @@ def create_ha_conf(socks: int, tor_http_tunnel_port: int, haproxy_port: int):
         "haproxy_port": haproxy_port
     }
 
-    script_path = os.path.dirname(os.path.abspath(__file__))
-    template_file_path = os.path.join(script_path, template_filename)
-    rendered_file_path = os.path.join(script_path, rendered_filename)
+    script_path = path.dirname(path.abspath(__file__))
+    template_file_path = path.join(script_path, template_filename)
+    rendered_file_path = path.join(script_path, rendered_filename)
 
     environment = jinja2.Environment(loader=jinja2.FileSystemLoader(script_path), autoescape=True, trim_blocks=True)
     output_text = environment.get_template(template_filename).render(render_vars)
 
     with open(rendered_file_path, "w") as result_file:
         result_file.write(output_text)
+    
     return rendered_file_path
 
 
 async def run_ha(rendered_file_path):
-    process = subprocess.Popen(['/usr/sbin/haproxy', '-f', rendered_file_path],
+    ha_process = subprocess.Popen(['/usr/sbin/haproxy', '-f', rendered_file_path],
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
+    stdout, stderr = ha_process.communicate()
 
 if __name__ == '__main__':
 
     number_of_socks: int = getenv("number_of_socks", 10)
+    haproxy_port: int = getenv("haproxy_port", 5000)
     starting_socks_port: int = getenv("starting_socks_port", 6080)
     starting_control_port: int = getenv("starting_control_port", 7080)
-    haproxy_port: int = getenv("haproxy_port", 5000)
     tor_http_tunnel_port: int = getenv("tor_http_tunnel_port", 8000)
 
     start_tor(
@@ -87,6 +85,3 @@ if __name__ == '__main__':
     )
 
     asyncio.run(run_ha(rendered_file_path=rendered_file_path))
-    # sleep(9999)
-
-
